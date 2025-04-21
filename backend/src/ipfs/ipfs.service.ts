@@ -1,27 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { join } from 'path';
-import { pathToFileURL } from 'url';
+import axios from 'axios';
+import * as FormData from 'form-data';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 @Injectable()
 export class IpfsService {
   private readonly logger = new Logger(IpfsService.name);
-  private uploader: any;
-
-  private async getUploader() {
-    if (!this.uploader) {
-      const mjsPath = join(__dirname, 'ipfs-uploader.mjs');
-      const fileUrl = pathToFileURL(mjsPath).href;
-
-      const dynamicImport = new Function('specifier', 'return import(specifier)');
-      const esmModule = await dynamicImport(fileUrl);
-
-      this.uploader = esmModule.uploadToIpfs;
-    }
-    return this.uploader;
-  }
 
   async upload(buffer: Buffer): Promise<string> {
-    const uploader = await this.getUploader();
-    return uploader(buffer);
+    const formData = new FormData();
+    formData.append('file', buffer, {
+      filename: 'upload.jpg', // You can replace this with the real filename if needed
+    });
+
+    const res = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', formData, {
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      headers: {
+        ...formData.getHeaders(),
+        pinata_api_key: process.env.PINATA_API_KEY,
+        pinata_secret_api_key: process.env.PINATA_API_SECRET,
+      },
+    });
+
+    return res.data.IpfsHash;
   }
 }
