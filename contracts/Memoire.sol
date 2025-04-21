@@ -3,109 +3,126 @@ pragma solidity ^0.8.0;
 
 /**
  * @title MemoireVault
- * @dev A decentralized time-locked vault system allowing users to store content identifiers (CIDs)
- *      with controlled unlock times and permissioned access for other wallets.
+ * @author 
+ * @notice A decentralized, time-locked vault system allowing users to securely store 
+ *         content identifiers (CIDs) on-chain with permissioned retrieval after a defined unlock time.
+ * @dev Implements strict ownership, controlled access permissions, and time-locked retrieval mechanisms.
  */
 contract MemoireVault {
-    // Maximum permissible unlock period (10 years)
-    uint constant MAX_UNLOCK_PERIOD = 3650 days;
+    /// @notice Maximum permissible unlock period (10 years)
+    uint constant MAX_UNLOCK_PERIOD = 3650 days; 
 
     /**
-     * @dev Vault structure holding metadata and access control.
+     * @dev Struct representing an individual vault.
+     * @param owner Address of the vault creator and owner.
+     * @param name Human-readable name for vault identification.
+     * @param cids Array of content identifiers (e.g., IPFS hashes).
+     * @param unlockTime UNIX timestamp after which the vault contents can be retrieved.
+     * @param retrieved Flag indicating whether the vault contents have been retrieved.
+     * @param permitted Mapping of wallet addresses permitted to retrieve the vault after unlock.
+     * @param permittedWallets Array of explicitly permitted wallet addresses for easier enumeration.
      */
     struct Vault {
-        address owner;                     // Creator and owner of the vault
-        string cid;                        // Content identifier (e.g. IPFS CID)
-        uint unlockTime;                   // Timestamp when vault can be retrieved
-        bool retrieved;                    // Flag indicating if the vault has been accessed
-        mapping(address => bool) permitted; // Mapping of addresses permitted to access the vault
-        address[] permittedWallets;        // Array of explicitly permitted wallet addresses
+        address owner;
+        string name;
+        string[] cids;
+        uint unlockTime;
+        bool retrieved;
+        mapping(address => bool) permitted;
+        address[] permittedWallets;
     }
 
-    mapping(uint => Vault) private vaults;          // Mapping of vault IDs to Vaults
-    mapping(address => uint[]) private userVaults;  // Mapping of user addresses to their vault IDs
-    uint private vaultCounter = 1000;               // Auto-incrementing vault ID starting from 1000
+    mapping(bytes32 => Vault) private vaults;
+    mapping(address => bytes32[]) private userVaults;
 
-    // Events for external listeners
-    event VaultCreated(uint indexed vaultId, address indexed owner, string cid, uint unlockTime);
-    event VaultRetrieved(uint indexed vaultId, address indexed retriever, string cid);
-    event WalletPermitted(uint indexed vaultId, address indexed wallet);
-    event WalletRevoked(uint indexed vaultId, address indexed wallet);
-    event UnlockTimeExtended(uint indexed vaultId, uint newUnlockTime);
-    event VaultDestroyed(uint indexed vaultId);
+    event VaultCreated(bytes32 indexed vaultId, address indexed owner, string name, uint unlockTime);
+    event VaultRetrieved(bytes32 indexed vaultId, address indexed retriever, string[] cids);
+    event WalletPermitted(bytes32 indexed vaultId, address indexed wallet);
+    event WalletRevoked(bytes32 indexed vaultId, address indexed wallet);
+    event UnlockTimeExtended(bytes32 indexed vaultId, uint newUnlockTime);
+    event VaultDestroyed(bytes32 indexed vaultId);
+
 
     /**
-     * @dev Modifier to restrict functions to vault owners only.
+     * @dev Restricts function access to the vault owner.
+     * @param vaultId Identifier of the vault being accessed.
      */
-    modifier onlyOwner(uint vaultId) {
+    modifier onlyOwner(bytes32 vaultId) {
         require(msg.sender == vaults[vaultId].owner, "Only owner can execute");
         _;
     }
 
     /**
      * @notice Creates a new time-locked vault.
-     * @param cid The content identifier associated with the vault.
-     * @param unlockTime The future timestamp after which the vault can be accessed.
+     * @param name The human-readable name of the vault.
+     * @param cids An array of content identifiers (CIDs) associated with the vault.
+     * @param unlockTime UNIX timestamp after which the vault can be retrieved.
      */
-    function createVault(string calldata cid, uint unlockTime) external {
-        require(bytes(cid).length > 0, "CID cannot be empty");
+    function createVault(string calldata name, string[] calldata cids, uint unlockTime) external {
+        require(bytes(name).length > 0, "Vault name cannot be empty");
+        require(cids.length > 0, "At least one CID is required");
         require(unlockTime > block.timestamp, "Unlock time must be in the future");
         require(unlockTime <= block.timestamp + MAX_UNLOCK_PERIOD, "Unlock time too far in future");
 
-        vaultCounter++;
-        Vault storage v = vaults[vaultCounter];
+        bytes32 vaultId = keccak256(abi.encodePacked(name, msg.sender));
+        Vault storage v = vaults[vaultId];
+        require(v.owner == address(0), "Vault already exists with this name");
+
         v.owner = msg.sender;
-        v.cid = cid;
+        v.name = name;
         v.unlockTime = unlockTime;
         v.retrieved = false;
 
-        userVaults[msg.sender].push(vaultCounter);
+        for (uint i = 0; i < cids.length; i++) {
+            require(bytes(cids[i]).length > 0, "CID cannot be empty");
+            v.cids.push(cids[i]);
+        }
 
-        emit VaultCreated(vaultCounter, msg.sender, cid, unlockTime);
+        userVaults[msg.sender].push(vaultId);
+        emit VaultCreated(vaultId, msg.sender, name, unlockTime);
     }
 
     /**
-     * @notice Retrieve a vault's content if unlock time has passed and caller is authorized.
-     * @param vaultId The ID of the vault to retrieve.
-     * @return The CID associated with the vault.
+     * @notice Retrieves the CIDs stored in a vault after unlock time has passed.
+     * @dev Marks the vault as retrieved upon successful access.
+     * @param vaultId The identifier of the vault to retrieve.
+     * @return cids The content identifiers stored in the vault.
      */
-    function retrieveVault(uint vaultId) external returns (string memory) {
+    function retrieveVault(bytes32 vaultId) external returns (string[] memory) {
         Vault storage v = vaults[vaultId];
         require(msg.sender == v.owner || v.permitted[msg.sender], "Access denied");
         require(block.timestamp >= v.unlockTime, "Vault still locked");
         require(!v.retrieved, "Vault already retrieved");
 
         v.retrieved = true;
-        emit VaultRetrieved(vaultId, msg.sender, v.cid);
-        return v.cid;
+        emit VaultRetrieved(vaultId, msg.sender, v.cids);
+        return v.cids;
     }
 
     /**
-     * @notice Permit another wallet address to access a vault once it's unlocked.
-     * @param vaultId The ID of the vault.
-     * @param wallet The wallet address to be permitted.
+     * @notice Permits a wallet to access a vault after the unlock time.
+     * @param vaultId The identifier of the vault.
+     * @param wallet The wallet address to grant permission to.
      */
-    function permitWallet(uint vaultId, address wallet) external onlyOwner(vaultId) {
+    function permitWallet(bytes32 vaultId, address wallet) external onlyOwner(vaultId) {
         require(wallet != address(0), "Invalid address");
         require(!vaults[vaultId].permitted[wallet], "Wallet already permitted");
 
         vaults[vaultId].permitted[wallet] = true;
         vaults[vaultId].permittedWallets.push(wallet);
-
         emit WalletPermitted(vaultId, wallet);
     }
 
     /**
-     * @notice Revoke a wallet's permission to access a vault.
-     * @param vaultId The ID of the vault.
-     * @param wallet The wallet address to be revoked.
+     * @notice Revokes a wallet's permission to access a vault.
+     * @param vaultId The identifier of the vault.
+     * @param wallet The wallet address to revoke permission from.
      */
-    function revokeWallet(uint vaultId, address wallet) external onlyOwner(vaultId) {
+    function revokeWallet(bytes32 vaultId, address wallet) external onlyOwner(vaultId) {
         require(vaults[vaultId].permitted[wallet], "Wallet not permitted");
 
         vaults[vaultId].permitted[wallet] = false;
 
-        // Remove wallet from the permittedWallets array
         address[] storage permittedList = vaults[vaultId].permittedWallets;
         for (uint i = 0; i < permittedList.length; i++) {
             if (permittedList[i] == wallet) {
@@ -119,40 +136,40 @@ contract MemoireVault {
     }
 
     /**
-     * @notice Get the list of vault IDs owned by a given address.
-     * @param user The address whose vault IDs are to be retrieved.
-     * @return An array of vault IDs.
+     * @notice Returns the list of vault IDs owned by a specific user.
+     * @param user The address of the vault owner.
+     * @return An array of vault identifiers.
      */
-    function getVaultIds(address user) external view returns (uint[] memory) {
+    function getVaultIds(address user) external view returns (bytes32[] memory) {
         return userVaults[user];
     }
 
     /**
-     * @notice Check if a vault is currently open.
-     * @param vaultId The ID of the vault.
+     * @notice Checks if a vault is currently open for retrieval.
+     * @param vaultId The identifier of the vault.
      * @return True if open, false if still locked.
      */
-    function isVaultOpen(uint vaultId) external view returns (bool) {
+    function isVaultOpen(bytes32 vaultId) external view returns (bool) {
         return block.timestamp >= vaults[vaultId].unlockTime;
     }
 
     /**
-     * @notice Get current status and unlock time of a vault.
-     * @param vaultId The ID of the vault.
-     * @return isOpen Whether the vault is open.
+     * @notice Returns a vault's open status and unlock time.
+     * @param vaultId The identifier of the vault.
+     * @return isOpen True if vault is open, false otherwise.
      * @return unlockTime The unlock timestamp.
      */
-    function getVaultStatus(uint vaultId) external view returns (bool isOpen, uint unlockTime) {
+    function getVaultStatus(bytes32 vaultId) external view returns (bool isOpen, uint unlockTime) {
         isOpen = block.timestamp >= vaults[vaultId].unlockTime;
         unlockTime = vaults[vaultId].unlockTime;
     }
 
     /**
-     * @notice Extend the unlock time of a vault (owner-only).
-     * @param vaultId The ID of the vault.
-     * @param newUnlockTime The new future unlock timestamp.
+     * @notice Extends a vault's unlock time.
+     * @param vaultId The identifier of the vault.
+     * @param newUnlockTime New unlock timestamp.
      */
-    function extendUnlockTime(uint vaultId, uint newUnlockTime) external onlyOwner(vaultId) {
+    function extendUnlockTime(bytes32 vaultId, uint newUnlockTime) external onlyOwner(vaultId) {
         require(newUnlockTime > block.timestamp, "Unlock time must be in the future");
         require(newUnlockTime <= block.timestamp + MAX_UNLOCK_PERIOD, "Unlock time too far in future");
         require(newUnlockTime > vaults[vaultId].unlockTime, "New unlock time must be later");
@@ -162,14 +179,13 @@ contract MemoireVault {
     }
 
     /**
-     * @notice Destroy a vault before it becomes accessible (owner-only).
-     * @param vaultId The ID of the vault.
+     * @notice Destroys a vault before it unlocks.
+     * @param vaultId The identifier of the vault.
      */
-    function destroyVault(uint vaultId) external onlyOwner(vaultId) {
+    function destroyVault(bytes32 vaultId) external onlyOwner(vaultId) {
         require(block.timestamp < vaults[vaultId].unlockTime, "Cannot destroy unlocked vault");
 
-        // Remove vault ID from the owner's list
-        uint[] storage ids = userVaults[msg.sender];
+        bytes32[] storage ids = userVaults[msg.sender];
         for (uint i = 0; i < ids.length; i++) {
             if (ids[i] == vaultId) {
                 ids[i] = ids[ids.length - 1];
@@ -183,11 +199,27 @@ contract MemoireVault {
     }
 
     /**
-     * @notice Get the list of currently permitted wallets for a vault.
-     * @param vaultId The ID of the vault.
-     * @return Array of permitted wallet addresses.
+     * @notice Returns the list of permitted wallets for a vault.
+     * @param vaultId The identifier of the vault.
+     * @return An array of permitted wallet addresses.
      */
-    function getPermittedWallets(uint vaultId) external view returns (address[] memory) {
+    function getPermittedWallets(bytes32 vaultId) external view returns (address[] memory) {
         return vaults[vaultId].permittedWallets;
+    }
+
+    /**
+     * @notice Retrieves a summary list of vault IDs and names owned by a specific address.
+     * @param owner The address of the vault owner.
+     * @return An array of vault identifiers and corresponding names.
+     */
+    function getVaultSummaries(address owner) external view returns (bytes32[] memory, string[] memory) {
+        bytes32[] storage ids = userVaults[owner];
+        string[] memory names = new string[](ids.length);
+
+        for (uint i = 0; i < ids.length; i++) {
+            names[i] = vaults[ids[i]].name;
+        }
+
+        return (ids, names);
     }
 }
