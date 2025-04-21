@@ -1,26 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { create } from 'ipfs-http-client';
-import { readFile } from 'fs/promises';
-import * as path from 'path';
+import { IpfsService } from '../ipfs/ipfs.service';
 
 @Injectable()
 export class UploadService {
-  private ipfs = create({
-    host: 'ipfs.infura.io',
-    port: 5001,
-    protocol: 'https',
-  });
+  constructor(private readonly ipfsService: IpfsService) {}
 
   async processUpload(files: Express.Multer.File[], lockTime: string) {
     const uploadedHashes: { cid: string; originalName: string }[] = [];
 
     for (const file of files) {
-      const filePath = path.join(process.cwd(), 'temp', file.filename);
-      const buffer = await readFile(filePath);
-
-      const result = await this.ipfs.add(buffer);
+      const cid = await this.ipfsService.upload(file.buffer);
       uploadedHashes.push({
-        cid: result.cid.toString(),
+        cid,
         originalName: file.originalname,
       });
     }
@@ -31,3 +22,4 @@ export class UploadService {
     };
   }
 }
+
