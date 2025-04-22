@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
+/** @type {import('next').NextConfig} */
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    domains: ['picsum.photos', 'ipfs.io', 'gateway.pinata.cloud'],
+  },
 };
 
 export default nextConfig;
