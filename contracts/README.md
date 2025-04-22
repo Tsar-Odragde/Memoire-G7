@@ -105,7 +105,7 @@ node_modules
 ## 👥 Team
 
 This project is built by **Group 7** in the Encode Bootcamp 💡  
-Contributors: `@jjmaloth`, `@Tsar-Odragde`, and team.
+
 
 ---
 
