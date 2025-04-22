@@ -27,7 +27,6 @@ contract MemoireVault {
         string name;
         string[] cids;
         uint unlockTime;
-        bool retrieved;
         mapping(address => bool) permitted;
         address[] permittedWallets;
     }
@@ -71,8 +70,7 @@ contract MemoireVault {
         v.owner = msg.sender;
         v.name = name;
         v.unlockTime = unlockTime;
-        v.retrieved = false;
-
+    
         for (uint i = 0; i < cids.length; i++) {
             require(bytes(cids[i]).length > 0, "CID cannot be empty");
             v.cids.push(cids[i]);
@@ -92,9 +90,7 @@ contract MemoireVault {
         Vault storage v = vaults[vaultId];
         require(msg.sender == v.owner || v.permitted[msg.sender], "Access denied");
         require(block.timestamp >= v.unlockTime, "Vault still locked");
-        require(!v.retrieved, "Vault already retrieved");
 
-        v.retrieved = true;
         emit VaultRetrieved(vaultId, msg.sender, v.cids);
         return v.cids;
     }
