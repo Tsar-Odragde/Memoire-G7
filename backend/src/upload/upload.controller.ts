@@ -25,7 +25,7 @@ export class UploadController {
   @ApiOperation({ summary: 'Upload files and set a timelock' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'Upload one or more files with a lockTime timestamp',
+    description: 'Upload one or more files with a lockTime timestamp and vault name',
     schema: {
       type: 'object',
       properties: {
@@ -40,8 +40,12 @@ export class UploadController {
           type: 'string',
           example: '2025-01-01T00:00:00Z',
         },
+        name: {
+          type: 'string',
+          example: 'my-vault-name',
+        },
       },
-      required: ['files', 'lockTime'],
+      required: ['files', 'lockTime', 'name'],
     },
   })
   @UseInterceptors(FilesInterceptor('files', 5, multerConfig))
@@ -49,6 +53,6 @@ export class UploadController {
     @UploadedFiles() files: Express.Multer.File[],
     @Body() body: UploadRequestDto,
   ) {
-    return this.uploadService.processUpload(files, body.lockTime);
+    return this.uploadService.processUpload(files, body.lockTime, body.name);
   }
 }
