@@ -27,9 +27,7 @@ export class BlockchainService {
     transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`),
   });
 
-  async createVault(name: string, cids: string[], unlockTime: number): Promise<{ vaultId: string; txHash: string }> {
-    this.logger.log(`Creating vault with name="${name}" and ${cids.length} CID(s)`);
-
+  async createVaultTxRequest(name: string, cids: string[], unlockTime: number) {
     const { request } = await this.publicClient.simulateContract({
       account: this.account,
       address: this.vaultAddress as `0x${string}`,
@@ -37,32 +35,9 @@ export class BlockchainService {
       functionName: 'createVault',
       args: [name, cids, BigInt(unlockTime)],
     });
-
-    const txHash = await this.walletClient.writeContract(request);
-    this.logger.log(`Vault creation tx hash: ${txHash}`);
-
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-
-    const decodedLogs = receipt.logs.map(log => {
-      try {
-        return decodeEventLog({
-          abi: memoireVaultAbi,
-          eventName: 'VaultCreated',
-          data: log.data,
-          topics: log.topics,
-        });
-      } catch {
-        return null;
-      }
-    });
-
-    const createdEvent = decodedLogs.find(e => e?.eventName === 'VaultCreated');
-    const vaultId = createdEvent?.args && 'vaultId' in createdEvent.args
-      ? (createdEvent.args.vaultId as `0x${string}`)
-      : '0x';
-
-    return { vaultId, txHash };
-  }
+  
+    return request;
+  }  
 
   async getVaultStatus(vaultId: `0x${string}`): Promise<{ isOpen: boolean; unlockTime: bigint }> {
     const result = await this.publicClient.readContract({
@@ -76,7 +51,7 @@ export class BlockchainService {
     return { isOpen, unlockTime };
   }
 
-  async retrieveVault(vaultId: `0x${string}`): Promise<string[]> {
+  async createRetrieveVaultTxRequest(vaultId: `0x${string}`) {
     const { request } = await this.publicClient.simulateContract({
       account: this.account,
       address: this.vaultAddress as `0x${string}`,
@@ -84,27 +59,10 @@ export class BlockchainService {
       functionName: 'retrieveVault',
       args: [vaultId],
     });
-
-    const txHash = await this.walletClient.writeContract(request);
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-
-    const decodedLogs = receipt.logs.map(log => {
-      try {
-        return decodeEventLog({
-          abi: memoireVaultAbi,
-          eventName: 'VaultRetrieved',
-          data: log.data,
-          topics: log.topics,
-        });
-      } catch {
-        return null;
-      }
-    });
-
-    const retrievedEvent = decodedLogs.find(e => e?.eventName === 'VaultRetrieved');
-    //this.logger.debug('Retrieved event args:', retrievedEvent?.args);
-    const cids = (retrievedEvent?.args as any)?.cids || [];
-
-    return cids;
+  
+    const { account, ...cleanedRequest } = request;
+    return JSON.parse(JSON.stringify(cleanedRequest, (_, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    ));
   }
 }

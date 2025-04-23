@@ -33,6 +33,7 @@ export class VaultService {
   }
 
   private async retrieveVault(vaultId: string): Promise<string[]> {
-    return this.blockchainService.retrieveVault(vaultId as `0x${string}`);
+    return this.blockchainService.createRetrieveVaultTxRequest(vaultId as `0x${string}`);
+
   }
 }

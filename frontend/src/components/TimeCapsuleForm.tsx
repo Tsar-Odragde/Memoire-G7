@@ -1,10 +1,12 @@
 'use client';
 import React, { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract } from 'wagmi';
 import Image from 'next/image';
 
 export default function TimeCapsuleForm() {
   const { address } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+
   const [eventTitle, setEventTitle] = useState('');
   const [unlockDate, setUnlockDate] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
@@ -25,14 +27,35 @@ export default function TimeCapsuleForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement the submission logic
-    console.log({
-      eventTitle,
-      unlockDate,
-      recipientAddress,
-      senderAddress: address,
-      image: selectedImage
-    });
+    if (!selectedImage) return alert('Please select an image');
+
+    const formData = new FormData();
+    formData.append('name', eventTitle);
+    const dateObj = new Date(unlockDate);
+    formData.append('lockTime', dateObj.toISOString());    
+    formData.append('files', selectedImage);
+
+    //console.log('unlockDate:', unlockDate);
+    //console.log('toISOString:', new Date(unlockDate).toISOString());
+
+    try {
+      const res = await fetch('http://localhost:3001/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const { txRequest } = await res.json();
+
+      const txHash = await writeContractAsync({
+        ...txRequest,
+        account: address,
+      });
+
+      console.log('✅ Vault created, txHash:', txHash);
+    } catch (err) {
+      console.error('❌ Failed to create vault:', err);
+      alert('Vault creation failed. Check console for details.');
+    }
   };
 
   return (

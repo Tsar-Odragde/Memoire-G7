@@ -53,6 +53,8 @@ export class UploadController {
     @UploadedFiles() files: Express.Multer.File[],
     @Body() body: UploadRequestDto,
   ) {
+    //console.log('💥 Raw body:', body);
+    //console.log('🔐 Received lockTime:', body.lockTime);
     return this.uploadService.processUpload(files, body.lockTime, body.name);
   }
 }

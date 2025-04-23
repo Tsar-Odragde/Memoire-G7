@@ -11,23 +11,31 @@ export class UploadService {
 
   async processUpload(files: Express.Multer.File[], lockTime: string, name: string) {
     const cids: string[] = [];
-
+  
     for (const file of files) {
       const cid = await this.ipfsService.upload(file.buffer);
       cids.push(cid);
     }
+  
+    console.log('Received lockTime:', lockTime);
 
-    const unlockTimestamp = Math.floor(new Date(lockTime).getTime() / 1000); // convert to seconds
-    const { vaultId, txHash } = await this.blockchainService.createVault(name, cids, unlockTimestamp);
-
+    const timestamp = Date.parse(lockTime);
+    if (isNaN(timestamp)) {
+      throw new Error('Invalid unlock time format.');
+    }
+    const unlockTimestamp = Math.floor(timestamp / 1000);
+    
+    const txRequest = await this.blockchainService.createVaultTxRequest(name, cids, unlockTimestamp);
+    const { account, ...cleanedTxRequest } = txRequest;
+    
     return {
-      lockTime,
-      vaultId,
-      txHash,
+      txRequest: JSON.parse(JSON.stringify(cleanedTxRequest, (_, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      )),
       files: files.map((f, i) => ({
         originalName: f.originalname,
         cid: cids[i],
       })),
-    };
-  }
+    };    
+  }  
 }
