@@ -65,4 +65,24 @@ export class BlockchainService {
       typeof value === 'bigint' ? value.toString() : value
     ));
   }
+
+  async getVaultFilesFromTx(txHash: `0x${string}`): Promise<string[]> {
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+
+    const decodedLogs = receipt.logs.map(log => {
+      try {
+        return decodeEventLog({
+          abi: memoireVaultAbi,
+          eventName: 'VaultRetrieved',
+          data: log.data,
+          topics: log.topics,
+        });
+      } catch {
+        return null;
+      }
+    });
+
+    const event = decodedLogs.find(e => e?.eventName === 'VaultRetrieved');
+    return (event?.args as any)?.cids || [];
+  }
 }
