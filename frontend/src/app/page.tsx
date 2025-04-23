@@ -2,6 +2,7 @@
 import React from 'react';
 import WalletConnect from '../components/WalletConnect';
 import TimeCapsuleForm from '../components/TimeCapsuleForm';
+import VaultRetrievalForm from '../components/VaultRetrievalForm';
 import Link from 'next/link';
 
 export default function Home() {
@@ -23,6 +24,7 @@ export default function Home() {
           <WalletConnect />
           <div className="mt-8">
             <TimeCapsuleForm />
+            <VaultRetrievalForm />
           </div>
         </div>
       </div>
