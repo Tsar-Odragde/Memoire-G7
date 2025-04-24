@@ -7,11 +7,14 @@ export default function TimeCapsuleForm() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
+  const [vaultId, setVaultId] = useState('');
+  const [txHash, setTxHash] = useState('');
   const [eventTitle, setEventTitle] = useState('');
   const [unlockDate, setUnlockDate] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,35 +31,33 @@ export default function TimeCapsuleForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedImage) return alert('Please select an image');
-
+  
     const formData = new FormData();
     formData.append('name', eventTitle);
     const dateObj = new Date(unlockDate);
-    formData.append('lockTime', dateObj.toISOString());    
+    formData.append('lockTime', dateObj.toISOString());
     formData.append('files', selectedImage);
-
-    //console.log('unlockDate:', unlockDate);
-    //console.log('toISOString:', new Date(unlockDate).toISOString());
-
+  
     try {
       const res = await fetch('http://localhost:3001/upload', {
         method: 'POST',
         body: formData,
       });
-
+  
       const { txRequest } = await res.json();
-
+  
       const txHash = await writeContractAsync({
         ...txRequest,
         account: address,
       });
-
+  
+      setTxHash(txHash); // ✅ store it for the UI
       console.log('✅ Vault created, txHash:', txHash);
     } catch (err) {
       console.error('❌ Failed to create vault:', err);
       alert('Vault creation failed. Check console for details.');
     }
-  };
+  };  
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -69,7 +70,7 @@ export default function TimeCapsuleForm() {
           id="eventTitle"
           value={eventTitle}
           onChange={(e) => setEventTitle(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           required
         />
       </div>
@@ -83,7 +84,7 @@ export default function TimeCapsuleForm() {
           id="unlockDate"
           value={unlockDate}
           onChange={(e) => setUnlockDate(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           required
         />
       </div>
@@ -97,9 +98,8 @@ export default function TimeCapsuleForm() {
           id="recipientAddress"
           value={recipientAddress}
           onChange={(e) => setRecipientAddress(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           placeholder="0x..."
-          required
         />
       </div>
 
@@ -134,10 +134,26 @@ export default function TimeCapsuleForm() {
 
       <button
         type="submit"
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        disabled={loading}
+        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
       >
-        Create Time Capsule
+        {loading ? 'Creating...' : 'Create Time Capsule'}
       </button>
+      {txHash && (
+        <div className="mt-4 text-sm text-gray-700 bg-gray-50 p-4 rounded border break-all whitespace-break-spaces">
+          <p>
+            <strong>🔗 Transaction Hash:</strong>{' '}
+            <a
+              href={`https://sepolia.etherscan.io/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              {txHash}
+            </a>
+          </p>
+        </div>
+      )}
     </form>
   );
-} 
+}

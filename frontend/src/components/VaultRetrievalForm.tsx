@@ -21,7 +21,7 @@ export default function VaultRetrievalForm() {
       const txHash = await writeContractAsync(txRequest);
   
       console.log('✅ Vault retrieved, txHash:', txHash);
-      setStatus(`Vault retrieved. TxHash: ${txHash}`);
+      setStatus(`✅ Vault retrieved. [View on Etherscan](https://sepolia.etherscan.io/tx/${txHash})`);
   
       // Get list of CIDs from backend
       const cidRes = await fetch(`http://localhost:3001/vault/tx/${txHash}/cids`);
@@ -45,7 +45,7 @@ export default function VaultRetrievalForm() {
         id="vaultId"
         value={vaultId}
         onChange={(e) => setVaultId(e.target.value)}
-        className="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm"
+        className="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm text-gray-900"
         placeholder="0x..."
         required
       />
@@ -55,7 +55,22 @@ export default function VaultRetrievalForm() {
       >
         Retrieve Vault
       </button>
-      {status && <p className="text-sm text-gray-600 mt-2">{status}</p>}
+      {status && (
+        <div className="mt-4 text-sm text-gray-700 bg-gray-50 p-4 rounded border break-words">
+          <p><strong>✅ Vault Retrieved</strong></p>
+          <p>
+            <strong>🔗 Transaction Hash:</strong>{' '}
+            <a
+              href={`https://sepolia.etherscan.io/tx/${status}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline break-all"
+            >
+              {status}
+            </a>
+          </p>
+        </div>
+      )}
       {images.length > 0 && (
         <div className="mt-4 grid grid-cols-1 gap-4">
             <p className="text-sm font-medium text-gray-700 mb-2">Retrieved Images:</p>
